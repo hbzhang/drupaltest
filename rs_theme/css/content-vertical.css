@@ -1,0 +1,66 @@
+@import url('default.css');
+@import url('widgets.css');
+@import url('columns.css');
+@import url('layout.css');
+@import url('nav.css');
+@import url('search-box.css');
+
+#leftTwenty	{
+	margin-left: -30px;
+	}
+	
+.TenRedBold	{
+	font-family: Arial, Helvetica, sans-serif;
+	font-size: 10pt;
+	font-weight: bold;
+	color: #FF0000;
+}
+.nineBlack {
+	font-family: Arial, Helvetica, sans-serif;
+	font-size: 9pt;
+	color: #000000;
+}
+.eightBlack {
+	font-family: Arial, Helvetica, sans-serif;
+	font-size: 8pt;
+	color: #000000;
+}
+#imgRight	{
+	width: auto;
+	float: right;
+	}
+#imgLeft	{
+	display: block;
+	position: relative;
+	clear: both;
+	width: auto;
+	float: left;
+	margin-right: 10px;
+	}
+#mid200	{
+	display: block;
+	position: relative;
+	width: 200px;
+	margin: 0 auto 0 auto;
+	}
+#list	{
+	display: block;
+	position: relative;
+	margin-left: 80px;
+	}
+#signHack img	{
+	clear: both;
+	float: right;
+	border: none;
+	margin: -130px 0 0 0;
+	z-index: 1000;
+	}
+#leftHack	{
+	display: block;
+	position: relative;
+	clear: both;
+	width: auto;
+	float: left;
+	margin-right: 10px;
+	width: 350px;
+	}

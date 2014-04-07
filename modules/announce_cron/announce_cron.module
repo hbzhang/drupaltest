@@ -1,0 +1,122 @@
+<?php
+function announce_cron_menu()
+{
+	$items = array();
+	$base = array(
+		'access callback'		=>	'user_access',
+		'access arguments'	=>	array('administer announce'),
+	);
+	
+	$items['admin/config/announce'] = $base + array(
+		'title'							=>	'Announcement Settings',
+		'description'				=>	'Configure Announcement Email Settings',
+		'page callback'			=>	'system_admin_menu_block_page',
+		'position'					=>	'left',
+		'weight'						=>	'-22',
+		'type'							=>	MENU_NORMAL_ITEM,
+	);
+	$items['admin/config/announce/settings'] = $base + array(
+		'title'							=>	'Announcement Settings',
+		'description'				=>	'Configure Announcement Email settings',
+		'page callback'			=>	'drupal_get_form',
+		'page arguments'		=>	array('announce_cron_settings'),
+		'type'							=>	MENU_NORMAL_ITEM,
+	);
+	
+	return $items;
+}
+
+function announce_cron_permission()
+{
+	$perm = array(
+		'administer announce'	=>	array(
+			'title'							=>	t('Administer announce'),
+			'description'				=>	t('Modify Announcement Email settings'),
+		),
+	);
+	return $perm;
+}
+
+function announce_cron_settings()
+{
+	$form['announce_cron_email'] = array(
+		'#type'					=>	'textfield',
+		'#title'				=>	'Email Address',
+		'#description'	=>	'The email address to send the low announcement notification to',
+		'#default_value'=>	variable_get('announce_cron_email', ''),
+	);
+	
+	$ti = variable_get('announce_cron_last_email_time', '');
+	if($ti == ''){
+		$time = "Never";
+	}
+	else
+	{
+		$time = date('l, F j \a\t g:ia', $ti);
+	}
+		
+	$form['announce_cron_last_email_time'] = array(
+		'#type'					=>	'item',
+		'#title'				=>	t('Last Email Sent at'),
+		'#markup'				=>	$time,
+	);
+	
+	return system_settings_form($form);
+}
+
+function announce_cron_mail($key, &$message, $params)
+{
+}
+
+function announce_cron_cron()
+{
+	$last_email_timestamp = variable_get('announce_cron_last_email_time', mktime());
+	$email_addr = variable_get('announce_cron_email', '');
+	if($email_addr == '')
+	{
+		return;
+	}
+	$last_email_str = date("F j, Y g:ia", $last_email_timestamp);
+	$curtime = new DateTime();
+	$last_email_date = new DateTime($last_email_str . " +23 hours");
+	if($curtime > $last_email_date)
+	{
+		// its been 23 hours since the last email notification was sent
+		// so check announcements and send an email if necessary
+		// if it hasnt been 23 hours we might as well not check announcements
+		// since we wont be sending an email
+		watchdog('announce cron', 'Announcement cron: fired hasn\'t been run in 23 hours.', null, WATCHDOG_DEBUG);
+		$count = _announce_cron_check_announcements();
+		if($count <= 1)
+		{
+			// too low, send email
+			$message = drupal_mail('announce_cron', 'announce_notify', $email_addr, language_default(), array(), 'rsadmin@vt.edu', FALSE);
+			$sys = drupal_mail_system('announce_cron', 'announce_notify');
+			$message['subject'] = 'RecSports Website - Only One Announcement';
+			$message['body'] = array();
+			$message['body'][] = 'There is currently only one announcement showing on the main Rec Sports website. It is recommended that more announcements be added to prevent all announcements from dropping off completely.';
+			$message['body'][] = 'Thank you.';
+			$message['body'][] = '- Rec Sports Admin';
+			$message = $sys->format($message);
+			$message['result'] = $sys->mail($message);
+			watchdog('announce cron', 'Announcement cron: email sent thru PHP, may not actually send though', null, WATCHDOG_DEBUG);
+			// we only want to set this to current time when email is sent
+			// if the count is > 1 when run, force it to recheck the next time cron is run
+			// so it runs every 3 hours and checks every 3 hours until an email is sent
+			// or there are always at least 2 announcements
+			variable_set('announce_cron_last_email_time', mktime());
+		}
+	}
+}
+
+function _announce_cron_check_announcements()
+{
+	$count = 0;
+	$time = date('c');
+	$time = substr($time, 0, -6);
+	$sql = "SELECT count(*) as valid FROM field_data_field_start_date WHERE bundle='announcement' AND field_start_date_value2 > '$time'";
+	$count = db_query($sql)->fetchField();
+	watchdog('announce cron', 'Announcement cron: ' . $count . ' announcements are showing', null, WATCHDOG_DEBUG);
+	return $count;
+}
+?>

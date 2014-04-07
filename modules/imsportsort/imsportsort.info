@@ -1,0 +1,6 @@
+; $Id$
+name = IM Sport Sorting
+description = "Sorts the IM Sports by registration date and cancellation status"
+core = 7.x
+files[] = imsportsort.module
+package = VT Rec Sports

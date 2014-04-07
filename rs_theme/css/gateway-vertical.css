@@ -1,0 +1,52 @@
+@import url('default.css');
+@import url('widgets.css');
+@import url('columns.css');
+@import url('layout.css');
+@import url('nav.css');
+@import url('search-box.css');
+
+#info	{
+	float: right;
+	width: 250px;
+	}
+#previewPic	{
+	clear: both;
+	display: block;
+	float: left;
+	width: 135px;
+	}
+#incentiveList	{
+	clear: both;
+	display: block;
+	margin-left: 20px;
+	}
+#imgRight	{
+	width: auto;
+	float: right;
+	}
+#imgLeft	{
+	display: block;
+	position: relative;
+	clear: both;
+	width: auto;
+	float: left;
+	margin-right: 10px;
+	}
+#sponsors	{
+	margin: 0 15px 0 15px;
+	}
+#mid200	{
+	display: block;
+	position: relative;
+	width: 200px;
+	margin: 0 auto 0 auto;
+	}
+#undoH2 {
+	padding: 0;
+	border: 0;
+	clear: left;
+	font-family: Times, 'Times New Roman', serif;
+	font-weight: normal;
+	font-size: 1.1em; /* equivalent to 140% */
+	}
+	

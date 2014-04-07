@@ -1,0 +1,6 @@
+; $Id$
+name = Announcement Cron Task
+description = "Runs a check against the DB to see if only one announcement is currently active, and if so, sends an email to make sure more are added"
+core = 7.x
+files[] = announce_cron.module
+package = VT Rec Sports

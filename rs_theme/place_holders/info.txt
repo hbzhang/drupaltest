@@ -1,0 +1,1 @@
+This folder is simply for any files that are used just during development.  This simply allows us to hold the place for things that would be added by content later.

@@ -1,0 +1,64 @@
+<?php
+
+function _imsportsort_nodes($tid)
+{
+	$pager = false;
+	$limit = false;
+	$order = array('t.sticky' => 'DESC', 't.created' => 'DESC');
+	if (!variable_get('taxonomy_maintain_index_table', TRUE)) {
+		return array();
+	}
+	$query = db_select('taxonomy_index', 't');
+	$query->addTag('node_access');
+	$query->condition('tid', $tid);
+	if ($pager) {
+		$count_query = clone $query;
+		$count_query->addExpression('COUNT(t.nid)');
+		$query = $query->extend('PagerDefault');
+		if ($limit !== FALSE) {
+			$query = $query->limit($limit);
+		}
+		$query->setCountQuery($count_query);
+	}
+	else {
+		if ($limit !== FALSE) {
+			$query->range(0, $limit);
+		}
+	}
+	$query->addField('t', 'nid');
+	$query->addField('t', 'tid');
+	foreach ($order as $field => $direction) {
+		$query->orderBy($field, $direction);
+		// ORDER BY fields need to be loaded too, assume they are in the form
+		// table_alias.name
+		list($table_alias, $name) = explode('.', $field);
+		$query->addField($table_alias, $name);
+	}
+	return $query->execute()->fetchCol();
+}
+
+function _imsportsort_sort($nids)
+{
+	$nodes = "";
+	foreach($nids as $nid)
+	{
+		$nodes .= $nid . ",";
+	}
+	$nodes = substr($nodes, 0, -1);
+	$sortq = db_select('field_data_field_start_date', 'd');
+	$sortq->leftJoin('field_data_field_cancelled', 'c', 'd.entity_id=c.entity_id');
+	$sortq->distinct(true);
+	$sortq->fields('d', array('entity_id'));
+	$sortq->orderBy('c.field_cancelled_value', 'ASC');
+	$sortq->orderBy('d.field_start_date_value', 'ASC');
+	return $sortq->execute()->fetchCol();
+}
+
+function _imsportsort_sport_nodes($tid)
+{
+	$nodes = _imsportsort_nodes($tid);
+	$nodes = _imsportsort_sort($nodes);
+	return entity_load('intramural_sport', $nodes);
+}
+
+?>

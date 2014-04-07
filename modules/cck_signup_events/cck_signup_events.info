@@ -1,0 +1,5 @@
+name = CCK Signup Events
+description = UI to create Signup Shifts and Signups with fields pre-set
+dependencies[] = cck_signup
+core = 7.x
+package = "CCK Sign-up"

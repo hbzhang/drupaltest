@@ -1,0 +1,118 @@
+#sub-header-dept {
+	text-align: right;
+	vertical-align: top;
+	background-color:blue;
+}
+
+#sub-header-dept p {
+	font-size: 2em;
+	color: white;
+	}	
+
+#sub-header-dept .italic {
+	font-size: 1.7em;
+	color: white;
+	font-style: italic;
+	}
+
+#sub-header-tabs {
+	padding: 0;
+	vertical-align: baseline;
+	width: 100%;
+}
+
+#sub-header-tabs div {
+	width: 100%;
+	background-color: #3774b9;
+	border-bottom: 2px solid white;
+	padding: 5px;
+	position: static;
+	display: inline;
+}
+
+#sub-header-tabs-list {
+	display: inline;
+}
+
+#sub-header-tabs .active {
+	border-left: 2px solid white;
+	border-right: 2px solid white;
+	border-top: 2px solid white;
+	background-color: #ff8f2a;
+	z-index: 2;
+	width: 100%;
+	border-bottom-style: none;
+}
+
+#sub-header-tabs .spacer {
+	width: 8px;
+	background-color: #3774b9;
+	border-bottom: 2px solid white;
+}
+
+#sub-header-bottom {
+	height: 2px;
+	background-color: #ff8f2a;
+	z-index: 1;
+}
+
+
+/*Tab Attempts by Jason */
+#centeredmenu {
+   float:left;
+   width:100%;
+   background:transparent;
+   border-bottom:10px solid #610800;
+   overflow:hidden;
+   position:relative;
+   background-color:blue;
+	font: 12px "Lucida Grande", Lucida, Verdana, sans-serif;
+}
+#centeredmenu ul {
+   clear:left;
+   float:left;
+   list-style:none;
+   margin:0;
+   padding:0;
+   position:relative;
+   left:50%;
+   text-align:center;
+}
+#centeredmenu ul li {
+   display:block;
+   float:left;
+   list-style:none;
+   margin:0;
+   padding:0;
+   position:relative;
+   right:50%;
+
+}
+#centeredmenu ul li a {
+   display:block;
+   padding:1px 8px;
+   background: #95ABB7;
+   color:#000;
+   text-decoration:none;
+   line-height:2.0em;
+	margin: 0 0 0 2px;
+   
+}
+#centeredmenu ul li a:hover {
+   background: #610800;
+   color:#fff;
+
+}
+#centeredmenu ul li a.active,
+#centeredmenu ul li a.active:hover {
+   color:#fff;
+   background:#610800;
+   font-weight:bold;
+
+}
+
+/*Views Slideshow */
+#views_slideshow_cycle_main_announcement_banner-page_1{
+	background-color:black;
+}
+

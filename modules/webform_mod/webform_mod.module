@@ -1,0 +1,565 @@
+<?php
+/**
+ * @file
+ * Barcode addition for webform for use for 3.2 Run in Remembrance.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function webform_mod_menu() {
+  $items['fitness/events/32-run/register/confirm/%'] = array(
+    'title' => t('3.2 Run in Remembrance Registration Confirmation'),
+    'page callback' => 'webform_mod_confirm_page',
+    'page arguments' => array(5),
+    'access arguments' => array('access content'),
+  );
+  $items['fitness/events/32-run/register/request'] = array(
+    'title' => t('3.2 Run in Remembrance Registration Confirmation Request'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('webform_mod_request_form'),
+    'access arguments' => array('access content'),
+  );
+  $items['admin/config/content/webform_fix'] = array(
+    'title' => t('Fix 3.2 Run in Remembrance Registrations'),
+    'description' => t('Fix any Run in Remembrance Registration that does not have a barcode.')
+      . ' ' . t('Generates a new barcode for each submission.'),
+    'page callback' => 'webform_mod_admin_fix_submissions_page',
+    'access arguments' => array('access administration pages'),
+    'weight' => 40,
+  );
+  $items['admin/config/content/webform_fix/fix'] = array(
+    'title' => t('Fix Submissions'),
+    'page callback' => 'webform_mod_admin_fix_submissions',
+    'access arguments' => array('access administration pages'),
+    'type' => MENU_LOCAL_ACTION,
+  );
+
+  return $items;
+}
+
+/**
+ * Admin page callback.
+ * Lists all the submissions for the 3.2 Run in Remembrance that don't have a
+ * barcode value entered. Clicking on the "Fix Submissions" link will run each
+ * submission through the barcode generator and save the file, attach the
+ * barcode to the submission, and send the confirmation email with PDF.
+ */
+function webform_mod_admin_fix_submissions_page() {
+  $crumb[] = l(t('Home'), '');
+  $crumb[] = l(t('Administration'), 'admin');
+  $crumb[] = l(t('Configuration'), 'admin/config');
+  drupal_set_breadcrumb($crumb);
+  $results = db_select('webform_submitted_data', 'wsd')
+    ->fields('wsd', array('sid'))
+    ->condition('wsd.nid', 6940)
+    ->condition('wsd.cid', 25)
+    ->condition('wsd.data', '')
+    ->execute();
+  $headers = array(
+    t('Submission ID'),
+    t('Full Name'),
+    t('Email'),
+  );
+  $empty = t('All registration submissions have barcodes!');
+  $pre = '<p>' . t('The following submissions were not able to generate a barcode properly.') . ' ';
+  $pre .= t('In fixing these entries, a barcode will be generated and the confirmation email') . ' ';
+  $pre .= t('will be sent to the email address on file.') . '</p>';
+  $tablerows = array();
+  module_load_include('inc', 'webform', '/includes/webform.submissions');
+  foreach ($results as $row) {
+    $submission = webform_get_submissions(array('sid' => $row->sid));
+    $submission = $submission[$row->sid];
+    $name = $submission->data[1]['value'][0] . ' ' . $submission->data[2]['value'][0];
+    $email = $submission->data[3]['value'][0];
+    $tablerows[] = array('data' => array(l($submission->sid, 'node/6940/submission/' . $submission->sid), $name, $email));
+  }
+  return $pre . theme('table', array('header' => $headers, 'rows' => $tablerows, 'empty' => $empty));
+}
+
+/**
+ * Regenerates barcodes for submissions without one. Sends confirmation email
+ * once the barcode has been saved and attached to the submission.
+ */
+function webform_mod_admin_fix_submissions() {
+  $results = db_select('webform_submitted_data', 'wsd')
+    ->fields('wsd', array('sid'))
+    ->condition('wsd.nid', 6940)
+    ->condition('wsd.cid', 25)
+    ->condition('wsd.data', '')
+    ->execute();
+  module_load_include('inc', 'webform', '/includes/webform.submissions');
+  foreach ($results as $row) {
+    $submission = webform_get_submissions(array('sid' => $row->sid));
+    $submission = $submission[$row->sid];
+    $name = "barcode_" . substr(md5($submission->submitted), 2, 8) . ".png";
+    $uri = "public://webform/barcode/" . $name;
+    db_delete("file_managed")
+      ->condition('uri', $uri)
+      ->condition('filename', $name)
+      ->execute();
+    $node = node_load(6940);
+    webform_mod_webform_submission_insert($node, $submission);
+    webform_submission_send_mail($node, $submission);
+  }
+  drupal_set_message('All 3.2 Run in Remembrance registrations missing barcodes have been fixed.');
+  drupal_goto('admin/config/content/webform_fix');
+}
+
+/**
+ * Resend email form builder.
+ */
+function webform_mod_resend_email_form($form, $form_state) {
+  $form['markup'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Resend Confirmation Emails'),
+    '#description' => t('Resend all submission confirmation emails with the following email address.'),
+    '#attributes' => array('class' => array('webform-component-fieldset', 'form-wrapper')),
+  );
+  $form['markup']['email'] = array(
+    '#type' => 'textfield',
+    '#required' => TRUE,
+    '#title' => t('Email Address'),
+  );
+  $form['actions'] = array(
+    '#type' => 'actions',
+    'submit' => array(
+      '#type' => 'submit',
+      '#value' => 'Resend Emails',
+    ),
+    'cancel' => array(
+      '#type' => 'markup',
+      '#markup' => l('Cancel', 'fitness/events/32-run', array('attributes' => array('class' => array('cancel-link')))),
+    ),
+  );
+  return $form;
+}
+
+/**
+ * Resend email form validation.
+ */
+function webform_mod_resend_email_form_validate($form, $form_state) {
+  $em = $form_state['values']['email'];
+  if (!valid_email_address($em)) {
+    form_set_error('email', 'The email you entered is invalid.');
+    return FALSE;
+  }
+  return TRUE;
+}
+
+/**
+ * Resend email form submission.
+ */
+function webform_mod_resend_email_form_submit($form, $form_state) {
+  $em = $form_state['values']['email'];
+  webform_mod_resend_emails($em);
+  drupal_set_message(t('Submission emails have been resent to your email address @email', array('@email' => $em)));
+}
+
+/**
+ * Implements hook_node_view_alter().
+ */
+function webform_mod_node_view_alter(&$build) {
+  $node = NULL;
+  if (isset($build['#node'])) {
+    $node = $build['#node'];
+  }
+  if (isset($node) && !($node->nid == 6940 || $node->nid == 7130)) {
+    return;
+  }
+  if (!isset($build['webform'])) {
+    return;
+  }
+  if (isset($_GET['resend']) || !$build['webform']['#enabled']) {
+    // We want to resend emails. So disable webform and show email form.
+    $notices = drupal_get_messages('notice');
+    foreach ($notices as $notice) {
+      if ($notice[0] == "Submissions for this form are closed.") {
+        $msg = t('Registrations are currently closed.') . '<br />'
+          . t('Please use the form below if you need to have your confirmation emails resent.') . '<br />'
+          . l('Click here if you need to print out your confirmation page directly.', 'fitness/events/32-run/register/request');
+        drupal_set_message($msg, 'notice');
+      }
+      else {
+        drupal_set_message($notice[0], 'notice');
+      }
+    }
+    $build['webform']['#enabled'] = FALSE;
+    $build['resend_form'] = drupal_get_form('webform_mod_resend_email_form');
+  }
+  if (!isset($_GET['email'])) {
+    // Email is not set, so we check to see if a message is set for previous
+    // submissions.
+    $email = $build['webform']['#form']['submitted']['personal_information']['email']['#value'];
+    $notices = drupal_get_messages('notice');
+    $messages = drupal_get_messages('error');
+    foreach ($messages as $message) {
+      if (substr($message[0], 0, 34) == 'The value <em class="placeholder">') {
+        // Previous submission, so we change the message to show our links to
+        // submit another with same email, or resend submission emails.
+        $msg = '';
+        $link = l(
+          'Click here to submit another registration with this email address.',
+          'content/test-registration',
+          array('query' => array(
+            'email' => $email,
+          ))
+        );
+        $view = l(
+          'Click here to have all registrations resent to your email.',
+          'content/test-registration',
+          array('query' => array(
+            'resend' => NULL,
+          ))
+        );
+        $msg = t('You have already submitted this form.') . '<br />' . $link . '<br />' . $view;
+        drupal_set_message($msg, 'warning');
+        unset($build['webform']);
+      }
+      else {
+        // No previous submission, so just show the error message that would
+        // otherwise be displayed.
+        drupal_set_message($message[0], 'error');
+      }
+    }
+    foreach ($notices as $message) {
+      if (isset($build['webform'])) {
+        drupal_set_message($message[0], 'notice');
+      }
+    }
+  }
+  else {
+    // Email is passed in querystring, so we are wanting to submit another for
+    // this email address.
+    $email = urldecode($_GET['email']);
+    if ($email != '') {
+      $msg = t("Submitting another registration for the email @email.", array('@email' => $email));
+    }
+    else {
+      $msg = t("Submitting another registration for existing email.");
+    }
+    // Prefill the email address form field if email was passed in querystring.
+    $build['webform']['#form']['submitted']['personal_information']['email']['#value'] = $email;
+    $messages = drupal_get_messages('notice');
+    drupal_set_message($msg);
+  }
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function webform_mod_form_alter(&$form, &$form_state, $form_id) {
+  if (substr($form_id, 0, 24) == 'webform_client_form_6940') {
+    if (isset($_GET['email'])) {
+      // Email was passed in querystring, so we disable the unique validation
+      // function on the email field and only tell it to validate for a proper
+      // email address.
+      $form['submitted']['personal_information']['email']['#element_validate'] = array('_webform_validate_email');
+    }
+    if (count(arg()) == 5) {
+      // We're on admin page, so show the checkbox to change the email.
+      $weight = 0;
+      $checkboxweight = 0;
+      foreach ($form['submitted']['personal_information'] as $element => $values) {
+        if (substr($element, 0, 1) == "#") {
+          continue;
+        }
+        $form['submitted']['personal_information'][$element]['#weight'] = $weight++;
+        if ($element == 'email') {
+          $checkboxweight = $weight++;
+        }
+      }
+      $form['submitted']['personal_information']['email_check'] = array(
+        '#type' => 'checkbox',
+        '#title' => t('This Email is being changed'),
+        '#description' => t('Check this box if you sure you want to change this email address.'),
+        '#return_value' => 'ok',
+        '#weight' => $checkboxweight,
+      );
+      $form['submitted']['personal_information']['email']['#element_validate'] = array('_webform_validate_email', 'webform_mod_validate_admin');
+    }
+  }
+}
+
+/**
+ * Makes sure that the checkbox is checked if changing email addresses.
+ */
+function webform_mod_validate_admin($form, &$form_state) {
+  $checkbox = $form_state['values']['submitted']['personal_information']['email_check'];
+  if ($checkbox === "ok") {
+    unset($form_state['values']['submitted']['personal_information']['email_check']);
+  }
+  else {
+    $submission = $form_state['build_info']['args'][1];
+    $origemail = $submission->data[3]['value'][0];
+    $newemail = $form_state['values']['submitted']['personal_information']['email'];
+    if ($origemail == $newemail) {
+      unset($form_state['values']['submitted']['personal_information']['email_check']); 
+    }
+    else {
+      form_set_error("email_check", "You must check the checkbox if you want to change the email address.");
+      return FALSE;
+    }
+  }
+  return TRUE;
+}
+
+/**
+ * Resends submission email message for given email.
+ */
+function webform_mod_resend_emails($email) {
+  $q = db_select('webform_submitted_data', 'wsd')
+    ->fields('wsd')
+    ->condition('nid', 6940)
+    ->condition('data', $email)
+    ->execute();
+  foreach ($q as $row) {
+    $node = node_load($row->nid);
+    $submission = webform_get_submission($row->nid, $row->sid);
+    webform_submission_send_mail($node, $submission);
+  }
+}
+
+/**
+ * Implements hook_webform_submission_insert().
+ */
+function webform_mod_webform_submission_insert($node, $submission) {
+  if ($node->nid != 6940) {
+    return;
+  }
+  $number = webform_mod_create_barcode($submission);
+  $barcode = 'http://www.barcodesinc.com/generator/image.php?code=' . $number . '&style=198&type=C128B&width=300&height=100&xres=2&font=5';
+  $name = "barcode_" . substr(md5($submission->submitted), 2, 8) . ".png";
+  $image = imagecreatefrompng($barcode);
+  $imagepath = DRUPAL_ROOT . "/sites/drupal.recsports.vt.edu/files/webform/barcode/" . $name;
+  imagepng($image, $imagepath);
+  $file = new stdClass;
+  $file->fid = NULL;
+  $file->uri = "public://webform/barcode/" . $name;
+  $file->filename = $name;
+  $file->filemime = "image/png";
+  $file->uid = 1;
+  $file->status = FILE_STATUS_PERMANENT;
+  $file = file_save($file);
+  $submission->data[25]['value'][0] = $number;
+  $submission->data[7]['value'][0] = $file->fid;
+  $submission->data[8]['value'][0] = file_create_url($file->uri);
+  webform_submission_update($node, $submission);
+  $_SESSION['run_in_remembrance_sid'] = $submission->sid;
+}
+
+/**
+ * Returns the submission number for the node (starts at 1).
+ */
+function webform_mod_get_submission_number($submission) {
+  $count = db_select('webform_submissions', 'ws')
+    ->fields('ws')
+    ->condition('nid', $submission->nid)
+    ->condition('sid', $submission->sid, "<=")
+    ->execute()
+    ->rowCount();
+  return intval($count);
+}
+
+/**
+ * Generate the barcode number to be used base on submission number and date.
+ */
+function webform_mod_create_barcode($submission) {
+  $num = intval(webform_mod_get_submission_number($submission));
+  $datestr = intval(date("mdy", $submission->submitted));
+  $num += $datestr;
+  $num = $num . "";
+  while (strlen($num) < 5) {
+   $num = "0" . $num; 
+  }
+  $barcode = "";
+  for ($i=0; $i<strlen($num); $i++) {
+    $barcode = $barcode . substr($num, $i, 1) . rand(0, 9);
+  }
+  return $barcode;
+}
+
+/**
+ * Confirmation page to show submission info with barcode.
+ */
+function webform_mod_confirm_page($sid) {
+  if ((int) $sid != (int) $_SESSION['run_in_remembrance_sid']) {
+    return t("You are not allowed to view this submission.") . "<br />"
+      . t("Please check your email to print out your registration confirmation.")
+      . "<br /><br />" . t("If you cannot find your confirmation, please check")
+      . " " . t("your email's spam folder.") . "<br /><br />"
+      . l("Click here to find your registration confirmation.", "fitness/events/32-run/register/request");
+  }
+  if (!function_exists('webform_get_submissions')) {
+    module_load_include('inc', 'webform', 'includes/webform.submissions');
+  }
+  $submission = webform_get_submissions(array('sid' => $sid));
+  $submission = $submission[$sid];
+  drupal_add_css(drupal_get_path("module", "webform_mod") . "/css/print.css", array('media' => 'print'));
+  $nid = $submission->nid;
+  $page = "<div class='registration-submission'><br />";
+  $page .= t("<p align='center'><em>Please print this page immediately.<br />");
+  $page .= t("You must have this printout in order to check in on the day of the event.<br />");
+  $page .= t("A copy has been sent to the email address you submitted.</em></p><br />");
+  $page .= t("<p><span class='label'>First Name:</span> @fname</p>", array('@fname' => $submission->data[1]['value'][0]));
+  $page .= t("<p><span class='label'>Last Name:</span> @lname</p>", array('@lname' => $submission->data[2]['value'][0]));
+  $page .= t("<p><span class='label'>Email Address:</span> !email</p>", array('!email' => $submission->data[3]['value'][0]));
+  $page .= t("<p><span class='label'>Running Group:</span> @group</p>", array('@group' => webform_mod_get_option_value(6940, 13, $submission->data[13]['value'][0])));
+  $page .= "<p><span class='label'>Registration Date:</span> " . date("F j, Y -- h:i:s A", $submission->submitted) . "</p>";
+  $page .= t("<hr><p><em>If you would like to change your running group on the day of the event, you are free to do so.");
+  $page .= " " . t("Simply line up with the group you wish to run with. You do not need to notify any event staff of the change.</em></p>");
+  $page .= t("<p>Please see the !link for more information regarding the event.</p>", array('!link' => l("3.2 Run in Remembrance page", 'fitness/events/32-run') ));
+  $page .= "<div align='center'><img class='border' src='" . $submission->data[8]['value'][0] . "'></div>";
+  $page .= "</div>";
+  unset($_SESSION['run_in_remembrance_sid']);
+  return $page;
+}
+
+/**
+ * Form builder for submission request.
+ */
+function webform_mod_request_form($form, &$form_state) {
+  $form['help'] = array(
+    '#type' => 'markup',
+    '#markup' => 'Please enter your first name, last name and email as they were filled out on your initial registration.',
+  );
+  $form['first_name'] = array(
+    '#type' => 'textfield',
+    '#required' => TRUE,
+    '#title' => t('First Name'),
+  );
+  $form['last_name'] = array(
+    '#type' => 'textfield',
+    '#required' => TRUE,
+    '#title' => t('Last Name'),
+  );
+  $form['email'] = array(
+    '#type' => 'textfield',
+    '#required' => TRUE,
+    '#title' => t('Email Address'),
+  );
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => 'Submit Request',
+  );
+  return $form;
+}
+
+/**
+ * Form submit handler for submission request.
+ */
+function webform_mod_request_form_submit($form, &$form_state) {
+  $sid = NULL;
+  if (isset($form_state['values']['first_name'])
+    && isset($form_state['values']['last_name'])
+    && isset($form_state['values']['email'])) {
+    $first = $form_state['values']['first_name'];
+    $last = $form_state['values']['last_name'];
+    $email = $form_state['values']['email'];
+    $eq = db_select('webform_submitted_data', 'wsd')
+      ->fields('wsd', array('sid'))
+      ->condition('nid', 6940)
+      ->condition('cid', 3)
+      ->condition('data', $email)
+      ->execute();
+    foreach ($eq as $row) {
+      $fq = db_select('webform_submitted_data', 'wsd')
+        ->fields('wsd')
+        ->condition('nid', 6940)
+        ->condition('cid', 1)
+        ->condition('sid', $row->sid)
+        ->condition('data', $first)
+        ->countQuery()
+        ->execute()
+        ->fetchCol();
+      $lq = db_select('webform_submitted_data', 'wsd')
+        ->fields('wsd')
+        ->condition('nid', 6940)
+        ->condition('cid', 2)
+        ->condition('sid', $row->sid)
+        ->condition('data', $last)
+        ->countQuery()
+        ->execute()
+        ->fetchCol();
+      if ($lq[0] > 0 && $fq[0] > 0) {
+        $sid = $row->sid;
+        break;
+      }
+    }
+  }
+  if (!empty($sid)) {
+    $_SESSION['run_in_remembrance_sid'] = $sid;
+    drupal_goto("fitness/events/32-run/register/confirm/$sid");
+  }
+  else {
+    drupal_set_message(t("Unable to find a submission with the requested data."), 'error');
+  }
+}
+
+/**
+ * Returns the display value rather than the stored key value for a component.
+ */
+function webform_mod_get_option_value($nid, $cid, $valkey) {
+  $q = db_select("webform_component", "wc")
+    ->fields("wc", array("extra"))
+    ->condition("nid", $nid)
+    ->condition("cid", $cid)
+    ->execute()
+    ->fetchCol();
+  $q = $q[0];
+  if (!is_array($q)) {
+    $q = unserialize($q);
+  }
+  $options = explode("\n", $q['items']);
+  foreach ($options as $option) {
+    list($key, $value) = explode("|", $option);
+    if ($valkey == $key) {
+      return $value;
+    }
+  }
+}
+
+/**
+ * Implements hook_webform_exporters().
+ */
+function webform_mod_webform_exporters() {
+  return array(
+    'vtdelimited' => array(
+      'title' => t('CSV for VT Rec Sports'),
+      'description' => t('A CSV file format specifically for the 3.2 Run in Remembrance.'),
+      'handler' => 'webform_mod_exporter_handler',
+    ),
+  );
+}
+
+class webform_mod_exporter_handler extends webform_exporter_delimited {
+  var $delimiter;
+  var $keys;
+
+  function webform_mod_exporter_handler($options) {
+    $this->delimiter = ",";
+    $this->keys = array(0,2,8,11,12,14,16,17,18);
+  }
+
+  function bof(&$file_handle) {
+    $output = '';
+    @fwrite($file_handle, $output);
+  }
+
+  function add_row(&$file_handle, $data) {
+    $temp = array();
+    foreach ($data as $key => $value) {
+      if (in_array($key, $this->keys)) {
+        $temp[$key] = '"' . str_replace('"', '""', $value) . '"';
+      }
+    }
+    $temp[2] = '"' . substr($temp[2], 6, -1) . '"';
+    $row = implode($this->delimiter, $temp) . "\n";
+    @fwrite($file_handle, $row);
+  }
+
+  function set_headers($filename) {
+    drupal_add_http_header('Content-Type', 'text/csv');
+    drupal_add_http_header('Content-Disposition', "attachment; filename=$filename.csv");
+  }
+}
